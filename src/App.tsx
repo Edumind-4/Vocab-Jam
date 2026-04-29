@@ -43,6 +43,7 @@ interface PlayerData {
   score: number;
   lastAnsweredIndex: number;
   updatedAt: any;
+  team: 'red' | 'blue';
 }
 
 interface RoomData {
@@ -117,6 +118,16 @@ export default function App() {
       setRoomCode(code);
       setRole('host');
       setScreen('waiting');
+
+      // Add host as player so they can participate
+      await setDoc(doc(db, `rooms/${code}/players`, user.uid), {
+        id: user.uid,
+        nickname: user.displayName || 'Game Master',
+        score: 0,
+        lastAnsweredIndex: -1,
+        updatedAt: serverTimestamp(),
+        team: 'red'
+      });
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, 'rooms');
       setError('Failed to create room.');
@@ -179,6 +190,9 @@ export default function App() {
 
       // Check Nickname Validation
       const playersRef = collection(db, `rooms/${code}/players`);
+      const allPlayersSnap = await getDocs(playersRef);
+      const playersCount = allPlayersSnap.size;
+      
       const q = query(playersRef, where('nickname', '==', nickname));
       const playerSnap = await getDocs(q);
 
@@ -193,6 +207,7 @@ export default function App() {
         score: 0,
         lastAnsweredIndex: -1,
         updatedAt: serverTimestamp(),
+        team: playersCount % 2 === 0 ? 'red' : 'blue'
       });
 
       setRoomCode(code);
@@ -264,7 +279,7 @@ export default function App() {
   };
 
   const submitAnswer = async (index: number) => {
-    if (role !== 'player' || !room || !playerMe) return;
+    if (!room || !playerMe) return;
     if (playerMe.lastAnsweredIndex === room.currentQuestionIndex) return;
 
     const currentQ = questions[room.currentQuestionIndex];
@@ -602,9 +617,9 @@ function WaitingRoom({ roomCode, players, role, handleStartGame }: any) {
                 initial={{ scale: 0, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0, opacity: 0 }}
-                className="bg-white p-4 rounded-xl border-2 border-gray-100 shadow-sm font-bold flex items-center space-x-2"
+                className={`p-4 rounded-xl border-2 font-bold flex items-center space-x-2 shadow-sm ${p.team === 'red' ? 'border-red-100 bg-red-50 text-red-700' : 'border-blue-100 bg-blue-50 text-blue-700'}`}
               >
-                <div className="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${p.team === 'red' ? 'bg-red-200 text-red-700' : 'bg-blue-200 text-blue-700'}`}>
                   <User size={16} />
                 </div>
                 <span className="truncate">{p.nickname}</span>
@@ -648,29 +663,44 @@ function GameArena({ room, questions, players, playerMe, role, submitAnswer, han
   if (!currentQ) return null;
   const hasAnswered = playerMe?.lastAnsweredIndex === room.currentQuestionIndex;
 
+  const redScore = players.filter((p: any) => p.team === 'red').reduce((acc: number, p: any) => acc + p.score, 0);
+  const blueScore = players.filter((p: any) => p.team === 'blue').reduce((acc: number, p: any) => acc + p.score, 0);
+
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col pb-32">
-      {/* Real-time Leaderboard Bar */}
-      <div className="bg-white border-b border-gray-200 p-4 sticky top-0 z-10 overflow-x-auto shadow-sm no-scrollbar">
-        <div className="flex items-center space-x-6 min-w-max">
-          {players.slice(0, 8).map((p: any, idx: number) => (
-            <div key={p.id} className="flex flex-col min-w-[120px]">
-              <div className="flex items-center space-x-2">
-                <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black ${idx === 0 ? 'bg-yellow-400' : 'bg-gray-100'}`}>
+      {/* Team Score Bar - Vocabulary.com Style */}
+      <div className="bg-white border-b border-gray-200 sticky top-0 z-20 shadow-sm">
+        <div className="max-w-4xl mx-auto flex h-16">
+          <div className="flex-1 bg-red-500 flex items-center justify-between px-6 text-white relative">
+            <span className="font-black italic uppercase tracking-tighter text-xl">Red Team</span>
+            <span className="text-3xl font-black">{redScore.toLocaleString()}</span>
+            {blueScore < redScore && redScore > 0 && (
+              <div className="absolute -bottom-1 left-0 right-0 h-1 bg-white/30"></div>
+            )}
+          </div>
+          <div className="w-1 bg-white z-10"></div>
+          <div className="flex-1 bg-blue-500 flex items-center justify-between px-6 text-white relative">
+            <span className="text-3xl font-black">{blueScore.toLocaleString()}</span>
+            <span className="font-black italic uppercase tracking-tighter text-xl">Blue Team</span>
+            {redScore < blueScore && blueScore > 0 && (
+              <div className="absolute -bottom-1 left-0 right-0 h-1 bg-white/30"></div>
+            )}
+          </div>
+        </div>
+        
+        {/* Real-time Individual Leaderboard Bar */}
+        <div className="p-2 overflow-x-auto shadow-sm no-scrollbar bg-gray-50 border-t border-gray-100">
+          <div className="flex items-center space-x-6 min-w-max px-4">
+            {players.slice(0, 8).map((p: any, idx: number) => (
+              <div key={p.id} className="flex items-center space-x-2 bg-white px-3 py-1 rounded-full border border-gray-200">
+                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-black ${p.team === 'red' ? 'bg-red-500 text-white' : 'bg-blue-500 text-white'}`}>
                   {idx + 1}
                 </span>
-                <span className="font-bold text-sm truncate">{p.nickname}</span>
+                <span className="font-bold text-xs truncate max-w-[80px]">{p.nickname}</span>
+                <span className="text-[10px] font-black text-indigo-600">{p.score}</span>
               </div>
-              <div className="w-full bg-gray-100 h-1 mt-1 rounded-full overflow-hidden">
-                <motion.div 
-                  initial={false}
-                  animate={{ width: `${Math.min(100, (p.score / (questions.length * 100)) * 100)}%` }}
-                  className="h-full bg-indigo-500"
-                />
-              </div>
-              <span className="text-[10px] font-black text-gray-400 mt-1 uppercase tracking-wider">{p.score} pts</span>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       </div>
 
@@ -709,14 +739,14 @@ function GameArena({ room, questions, players, playerMe, role, submitAnswer, han
         </div>
 
         <AnimatePresence>
-          {hasAnswered && role === 'player' && (
+          {hasAnswered && (
             <motion.div 
               initial={{ y: 20, opacity: 0 }} 
               animate={{ y: 0, opacity: 1 }} 
               className="flex items-center space-x-2 text-indigo-600 font-bold bg-indigo-50 px-8 py-4 rounded-3xl border-2 border-indigo-100 shadow-sm"
             >
               <CheckCircle2 className="animate-bounce" />
-              <span>Answer Locked! Waiting for Host...</span>
+              <span>Answer Locked! Waiting for {role === 'host' ? 'others' : 'Host'}...</span>
             </motion.div>
           )}
         </AnimatePresence>
@@ -750,16 +780,40 @@ function ResultsPodium({ players, reset }: any) {
   const sorted = [...players].sort((a, b) => b.score - a.score);
   const top3 = sorted.slice(0, 3);
 
+  const redScore = players.filter((p: any) => p.team === 'red').reduce((acc: number, p: any) => acc + p.score, 0);
+  const blueScore = players.filter((p: any) => p.team === 'blue').reduce((acc: number, p: any) => acc + p.score, 0);
+
+  const winningTeam = redScore > blueScore ? 'Red Team' : blueScore > redScore ? 'Blue Team' : 'Tie';
+  const winnerColor = redScore > blueScore ? 'text-red-500' : blueScore > redScore ? 'text-blue-500' : 'text-gray-500';
+
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-16 min-h-screen py-24 text-center">
-      <motion.div initial={{ y: -50, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.2 }} className="space-y-4">
-        <div className="inline-block p-6 bg-yellow-400/10 rounded-full mb-4">
-          <Trophy className="text-yellow-400" size={80} />
+      <motion.div 
+        initial={{ scale: 0.8, opacity: 0 }} 
+        animate={{ scale: 1, opacity: 1 }} 
+        className="space-y-6"
+      >
+        <div className={`text-xl font-black uppercase tracking-[0.5em] ${winnerColor}`}>
+          {winningTeam === 'Tie' ? "It's a Tie!" : `${winningTeam} Victors!`}
         </div>
-        <h2 className="text-7xl font-black text-gray-900 tracking-tighter">Hall of Fame</h2>
+        <h2 className="text-8xl font-black text-gray-900 tracking-tighter">Arena Results</h2>
       </motion.div>
 
-      <div className="flex items-end justify-center space-x-4 h-96 mt-20 px-4 relative max-w-2xl mx-auto">
+      {/* Team Comparison */}
+      <div className="grid grid-cols-2 gap-8 max-w-2xl mx-auto">
+        <div className={`p-8 rounded-[40px] border-4 ${redScore > blueScore ? 'bg-red-500 text-white border-red-200' : 'bg-white border-red-500 text-red-500'} shadow-xl`}>
+          <div className="text-sm font-black uppercase mb-1">Red Team</div>
+          <div className="text-5xl font-black">{redScore.toLocaleString()}</div>
+        </div>
+        <div className={`p-8 rounded-[40px] border-4 ${blueScore > redScore ? 'bg-blue-500 text-white border-blue-200' : 'bg-white border-blue-500 text-blue-500'} shadow-xl`}>
+          <div className="text-sm font-black uppercase mb-1">Blue Team</div>
+          <div className="text-5xl font-black">{blueScore.toLocaleString()}</div>
+        </div>
+      </div>
+
+      <div className="space-y-4">
+        <h3 className="text-2xl font-black text-gray-400 uppercase tracking-widest italic">Top Performers</h3>
+        <div className="flex items-end justify-center space-x-4 h-96 mt-10 px-4 relative max-w-2xl mx-auto">
         {/* Silver */}
         {top3[1] && (
           <motion.div 
@@ -818,8 +872,9 @@ function ResultsPodium({ players, reset }: any) {
           </motion.div>
         )}
       </div>
+    </div>
 
-      <div className="space-y-6 pt-24 max-w-md mx-auto">
+    <div className="space-y-6 pt-24 max-w-md mx-auto">
         <button 
           id="btn-again"
           onClick={reset}

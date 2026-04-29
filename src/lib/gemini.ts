@@ -12,7 +12,7 @@ export interface QuizQuestion {
 export async function generateQuiz(criteria: string): Promise<QuizQuestion[]> {
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-2.5-flash-lite",
       contents: `Generate a vocabulary quiz based on the following criteria: "${criteria}". 
       Create exactly 10 questions. Each question must have a target word, its definition, and 4 multiple-choice options (one correct, three plausible distractors).`,
       config: {
