@@ -1,10 +1,10 @@
 {
-  "projectId": "gen-lang-client-0566895581",
-  "appId": "1:1030001889073:web:c38e28b762507a1d5e6a10",
-  "apiKey": "AIzaSyAxwRX8hJsG3rE-J3BV-Xty3KbjrTqnmK8",
-  "authDomain": "gen-lang-client-0566895581.firebaseapp.com",
+  "projectId": "vocab-jam",
+  "appId": "1:767132756751:web:2032101da36c493c1aec7a",
+  "apiKey": "AIzaSyCfA69k8iu3M2YjYhi05D_xqe_qBf283kk",
+  "authDomain": "vocab-jam.firebaseapp.com",
   "firestoreDatabaseId": "ai-studio-454f6cbf-ff5c-4027-aea1-28f279fb1d99",
-  "storageBucket": "gen-lang-client-0566895581.firebasestorage.app",
-  "messagingSenderId": "1030001889073",
+  "storageBucket": "vocab-jam.firebasestorage.app",
+  "messagingSenderId": "767132756751",
   "measurementId": ""
 }
