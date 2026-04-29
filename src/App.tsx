@@ -29,7 +29,8 @@ import {
   where, 
   getDocs,
   serverTimestamp,
-  orderBy
+  orderBy,
+  increment
 } from 'firebase/firestore';
 import { db, auth, ensureAuth, handleFirestoreError, OperationType, signInWithGoogle } from './lib/firebase';
 import { generateQuiz, QuizQuestion } from './lib/gemini';
@@ -51,6 +52,7 @@ interface RoomData {
   status: 'waiting' | 'active' | 'ended';
   currentQuestionIndex: number;
   createdAt: any;
+  questionStartedAt?: any;
 }
 
 export default function App() {
@@ -262,7 +264,10 @@ export default function App() {
   const handleStartGame = async () => {
     if (role !== 'host') return;
     try {
-      await updateDoc(doc(db, 'rooms', roomCode), { status: 'active' });
+      await updateDoc(doc(db, 'rooms', roomCode), { 
+        status: 'active',
+        questionStartedAt: serverTimestamp()
+      });
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `rooms/${roomCode}`);
     }
@@ -274,7 +279,10 @@ export default function App() {
     if (nextIndex >= questions.length) {
       await updateDoc(doc(db, 'rooms', roomCode), { status: 'ended' });
     } else {
-      await updateDoc(doc(db, 'rooms', roomCode), { currentQuestionIndex: nextIndex });
+      await updateDoc(doc(db, 'rooms', roomCode), { 
+        currentQuestionIndex: nextIndex,
+        questionStartedAt: serverTimestamp()
+      });
     }
   };
 
@@ -286,11 +294,20 @@ export default function App() {
     if (!currentQ) return;
     
     const isCorrect = index === currentQ.correctIndex;
-    const points = isCorrect ? 100 : 0;
+    
+    let points = 0;
+    if (isCorrect) {
+      // Speed bonus logic (Vocabulary.com style)
+      // Base points: 500, Bonus: up to 500
+      const startTime = room.questionStartedAt?.toMillis?.() || Date.now();
+      const elapsed = (Date.now() - startTime) / 1000;
+      const bonus = Math.max(0, Math.floor(500 * (1 - elapsed / 15))); // 15s decay
+      points = 500 + bonus;
+    }
 
     try {
       await updateDoc(doc(db, `rooms/${roomCode}/players`, auth.currentUser!.uid), {
-        score: playerMe.score + points,
+        score: increment(points),
         lastAnsweredIndex: room.currentQuestionIndex,
         updatedAt: serverTimestamp()
       });
@@ -787,102 +804,104 @@ function ResultsPodium({ players, reset }: any) {
   const winnerColor = redScore > blueScore ? 'text-red-500' : blueScore > redScore ? 'text-blue-500' : 'text-gray-500';
 
   return (
-    <div className="p-6 max-w-4xl mx-auto space-y-16 min-h-screen py-24 text-center">
-      <motion.div 
-        initial={{ scale: 0.8, opacity: 0 }} 
-        animate={{ scale: 1, opacity: 1 }} 
-        className="space-y-6"
-      >
-        <div className={`text-xl font-black uppercase tracking-[0.5em] ${winnerColor}`}>
-          {winningTeam === 'Tie' ? "It's a Tie!" : `${winningTeam} Victors!`}
-        </div>
-        <h2 className="text-8xl font-black text-gray-900 tracking-tighter">Arena Results</h2>
-      </motion.div>
-
-      {/* Team Comparison */}
-      <div className="grid grid-cols-2 gap-8 max-w-2xl mx-auto">
-        <div className={`p-8 rounded-[40px] border-4 ${redScore > blueScore ? 'bg-red-500 text-white border-red-200' : 'bg-white border-red-500 text-red-500'} shadow-xl`}>
-          <div className="text-sm font-black uppercase mb-1">Red Team</div>
-          <div className="text-5xl font-black">{redScore.toLocaleString()}</div>
-        </div>
-        <div className={`p-8 rounded-[40px] border-4 ${blueScore > redScore ? 'bg-blue-500 text-white border-blue-200' : 'bg-white border-blue-500 text-blue-500'} shadow-xl`}>
-          <div className="text-sm font-black uppercase mb-1">Blue Team</div>
-          <div className="text-5xl font-black">{blueScore.toLocaleString()}</div>
-        </div>
-      </div>
-
-      <div className="space-y-4">
-        <h3 className="text-2xl font-black text-gray-400 uppercase tracking-widest italic">Top Performers</h3>
-        <div className="flex items-end justify-center space-x-4 h-96 mt-10 px-4 relative max-w-2xl mx-auto">
-        {/* Silver */}
-        {top3[1] && (
-          <motion.div 
-            initial={{ height: 0 }} 
-            animate={{ height: '70%' }} 
-            transition={{ duration: 1, delay: 0.5 }}
-            className="flex-1 bg-slate-200 rounded-t-[40px] relative flex flex-col items-center justify-start p-6 shadow-lg"
-          >
-            <div className="absolute -top-24 text-center w-full">
-              <div className="w-16 h-16 bg-slate-100 rounded-full mx-auto flex items-center justify-center border-4 border-white shadow-md mb-2">
-                <User size={32} className="text-slate-400" />
-              </div>
-              <p className="font-black text-lg truncate px-2">{top3[1].nickname}</p>
-              <p className="text-slate-500 font-bold">{top3[1].score} pts</p>
-            </div>
-            <span className="text-6xl font-black text-slate-400/50 mt-4 italic">2ND</span>
-          </motion.div>
-        )}
-
-        {/* Gold */}
-        {top3[0] && (
-          <motion.div 
-            initial={{ height: 0 }} 
-            animate={{ height: '100%' }} 
-            transition={{ duration: 1, delay: 0.8 }}
-            className="flex-1 bg-yellow-400 rounded-t-[40px] relative flex flex-col items-center justify-start p-6 shadow-[0_20px_60px_rgba(250,204,21,0.5)] z-10"
-          >
-            <div className="absolute -top-32 text-center w-full">
-               <div className="w-24 h-24 bg-yellow-300 rounded-full mx-auto flex items-center justify-center border-8 border-white shadow-xl mb-4 relative">
-                 <Trophy className="text-yellow-700" size={40} />
-                 <div className="absolute -top-4 -right-4 bg-red-500 text-white w-10 h-10 rounded-full flex items-center justify-center border-4 border-white font-black">1</div>
-               </div>
-              <p className="font-black text-2xl truncate px-2">{top3[0].nickname}</p>
-              <p className="text-yellow-800 font-black tracking-wider">{top3[0].score} pts</p>
-            </div>
-            <span className="text-8xl font-black text-yellow-700/30 mt-8 italic">1ST</span>
-          </motion.div>
-        )}
-
-        {/* Bronze */}
-        {top3[2] && (
-          <motion.div 
-            initial={{ height: 0 }} 
-            animate={{ height: '50%' }} 
-            transition={{ duration: 1, delay: 1 }}
-            className="flex-1 bg-orange-200 rounded-t-[40px] relative flex flex-col items-center justify-start p-6 shadow-lg"
-          >
-            <div className="absolute -top-24 text-center w-full">
-              <div className="w-16 h-16 bg-orange-100 rounded-full mx-auto flex items-center justify-center border-4 border-white shadow-md mb-2">
-                <User size={32} className="text-orange-400" />
-              </div>
-              <p className="font-black text-lg truncate px-2">{top3[2].nickname}</p>
-              <p className="text-orange-700 font-bold">{top3[2].score} pts</p>
-            </div>
-            <span className="text-6xl font-black text-orange-900/10 mt-4 italic">3RD</span>
-          </motion.div>
-        )}
-      </div>
-    </div>
-
-    <div className="space-y-6 pt-24 max-w-md mx-auto">
-        <button 
-          id="btn-again"
-          onClick={reset}
-          className="w-full py-6 bg-indigo-600 hover:bg-indigo-700 text-white rounded-3xl font-black text-2xl shadow-2xl shadow-indigo-200 transform hover:scale-105 active:scale-95 transition-all"
+    <div className="min-h-screen py-24 px-6">
+      <div className="max-w-4xl mx-auto space-y-16 text-center">
+        <motion.div 
+          initial={{ scale: 0.8, opacity: 0 }} 
+          animate={{ scale: 1, opacity: 1 }} 
+          className="space-y-6"
         >
-          New Arena Jam
-        </button>
-        <p className="text-gray-300 font-black uppercase text-xs tracking-[0.2em]">Game Over &bull; Arena Concluded</p>
+          <div className={`text-xl font-black uppercase tracking-[0.5em] ${winnerColor}`}>
+            {winningTeam === 'Tie' ? "It's a Tie!" : `${winningTeam} Victors!`}
+          </div>
+          <h2 className="text-8xl font-black text-gray-900 tracking-tighter">Arena Results</h2>
+        </motion.div>
+
+        {/* Team Comparison */}
+        <div className="grid grid-cols-2 gap-8 max-w-2xl mx-auto">
+          <div className={`p-8 rounded-[40px] border-4 ${redScore > blueScore ? 'bg-red-500 text-white border-red-200' : 'bg-white border-red-500 text-red-500'} shadow-xl`}>
+            <div className="text-sm font-black uppercase mb-1">Red Team</div>
+            <div className="text-5xl font-black">{redScore.toLocaleString()}</div>
+          </div>
+          <div className={`p-8 rounded-[40px] border-4 ${blueScore > redScore ? 'bg-blue-500 text-white border-blue-200' : 'bg-white border-blue-500 text-blue-500'} shadow-xl`}>
+            <div className="text-sm font-black uppercase mb-1">Blue Team</div>
+            <div className="text-5xl font-black">{blueScore.toLocaleString()}</div>
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <h3 className="text-2xl font-black text-gray-400 uppercase tracking-widest italic">Top Performers</h3>
+          <div className="flex items-end justify-center space-x-4 h-96 mt-10 px-4 relative max-w-2xl mx-auto">
+            {/* Silver */}
+            {top3[1] && (
+              <motion.div 
+                initial={{ height: 0 }} 
+                animate={{ height: '70%' }} 
+                transition={{ duration: 1, delay: 0.5 }}
+                className="flex-1 bg-slate-200 rounded-t-[40px] relative flex flex-col items-center justify-start p-6 shadow-lg"
+              >
+                <div className="absolute -top-24 text-center w-full">
+                  <div className="w-16 h-16 bg-slate-100 rounded-full mx-auto flex items-center justify-center border-4 border-white shadow-md mb-2">
+                    <User size={32} className="text-slate-400" />
+                  </div>
+                  <p className="font-black text-lg truncate px-2">{top3[1].nickname}</p>
+                  <p className="text-slate-500 font-bold">{top3[1].score} pts</p>
+                </div>
+                <span className="text-6xl font-black text-slate-400/50 mt-4 italic">2ND</span>
+              </motion.div>
+            )}
+
+            {/* Gold */}
+            {top3[0] && (
+              <motion.div 
+                initial={{ height: 0 }} 
+                animate={{ height: '100%' }} 
+                transition={{ duration: 1, delay: 0.8 }}
+                className="flex-1 bg-yellow-400 rounded-t-[40px] relative flex flex-col items-center justify-start p-6 shadow-[0_20px_60px_rgba(250,204,21,0.5)] z-10"
+              >
+                <div className="absolute -top-32 text-center w-full">
+                  <div className="w-24 h-24 bg-yellow-300 rounded-full mx-auto flex items-center justify-center border-8 border-white shadow-xl mb-4 relative">
+                    <Trophy className="text-yellow-700" size={40} />
+                    <div className="absolute -top-4 -right-4 bg-red-500 text-white w-10 h-10 rounded-full flex items-center justify-center border-4 border-white font-black">1</div>
+                  </div>
+                  <p className="font-black text-2xl truncate px-2">{top3[0].nickname}</p>
+                  <p className="text-yellow-800 font-black tracking-wider">{top3[0].score} pts</p>
+                </div>
+                <span className="text-8xl font-black text-yellow-700/30 mt-8 italic">1ST</span>
+              </motion.div>
+            )}
+
+            {/* Bronze */}
+            {top3[2] && (
+              <motion.div 
+                initial={{ height: 0 }} 
+                animate={{ height: '50%' }} 
+                transition={{ duration: 1, delay: 1 }}
+                className="flex-1 bg-orange-200 rounded-t-[40px] relative flex flex-col items-center justify-start p-6 shadow-lg"
+              >
+                <div className="absolute -top-24 text-center w-full">
+                  <div className="w-16 h-16 bg-orange-100 rounded-full mx-auto flex items-center justify-center border-4 border-white shadow-md mb-2">
+                    <User size={32} className="text-orange-400" />
+                  </div>
+                  <p className="font-black text-lg truncate px-2">{top3[2].nickname}</p>
+                  <p className="text-orange-700 font-bold">{top3[2].score} pts</p>
+                </div>
+                <span className="text-6xl font-black text-orange-900/10 mt-4 italic">3RD</span>
+              </motion.div>
+            )}
+          </div>
+        </div>
+
+        <div className="space-y-6 pt-24 max-w-md mx-auto">
+          <button 
+            id="btn-again"
+            onClick={reset}
+            className="w-full py-6 bg-indigo-600 hover:bg-indigo-700 text-white rounded-3xl font-black text-2xl shadow-2xl shadow-indigo-200 transform hover:scale-105 active:scale-95 transition-all"
+          >
+            New Arena Jam
+          </button>
+          <p className="text-gray-300 font-black uppercase text-xs tracking-[0.2em]">Game Over &bull; Arena Concluded</p>
+        </div>
       </div>
     </div>
   );

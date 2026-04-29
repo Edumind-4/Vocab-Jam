@@ -16,7 +16,8 @@ service cloud.firestore {
       return data.hostId is string && data.hostId.size() > 0 &&
              data.status in ['waiting', 'active', 'ended'] &&
              data.currentQuestionIndex is number &&
-             data.createdAt is timestamp;
+             data.createdAt is timestamp &&
+             (!('questionStartedAt' in data) || data.questionStartedAt is timestamp);
     }
 
     match /rooms/{roomId} {
@@ -31,7 +32,7 @@ service cloud.firestore {
       allow update: if isSignedIn() &&
                       isValidRoom(incoming()) &&
                       existing().hostId == request.auth.uid &&
-                      (incoming().diff(existing()).affectedKeys().hasOnly(['status', 'currentQuestionIndex']));
+                      (incoming().diff(existing()).affectedKeys().hasOnly(['status', 'currentQuestionIndex', 'questionStartedAt']));
 
       allow delete: if false;
 
