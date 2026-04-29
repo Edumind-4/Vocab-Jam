@@ -1,0 +1,6 @@
+{
+  "name": "Vocab Jam Arena",
+  "description": "A real-time, multiplayer vocabulary game where hosts create AI-powered quizzes and players compete in a live arena.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["Firebase", "Gemini AI"]
+}

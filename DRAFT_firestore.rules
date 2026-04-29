@@ -1,0 +1,79 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Global helpers
+    function isSignedIn() { return request.auth != null; }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\\\-]+$'); }
+
+    // Room Validation
+    function isValidRoom(data) {
+      return data.hostId is string && data.hostId.size() > 0 &&
+             data.status in ['waiting', 'active', 'ended'] &&
+             data.currentQuestionIndex is number &&
+             data.createdAt is timestamp;
+    }
+
+    match /rooms/{roomId} {
+      allow get: if true; // Publicly readable for joining
+      allow list: if false; // No blanket listing
+
+      allow create: if isSignedIn() &&
+                      isValidRoom(incoming()) &&
+                      incoming().hostId == request.auth.uid &&
+                      incoming().createdAt == request.time;
+
+      allow update: if isSignedIn() &&
+                      isValidRoom(incoming()) &&
+                      existing().hostId == request.auth.uid &&
+                      (incoming().diff(existing()).affectedKeys().hasOnly(['status', 'currentQuestionIndex']));
+
+      allow delete: if false; // Rooms are not deleted by clients
+
+      match /players/{playerId} {
+        function isValidPlayer(data) {
+          return data.nickname is string && data.nickname.size() >= 2 && data.nickname.size() <= 32 &&
+                 data.score is number &&
+                 data.updatedAt is timestamp;
+        }
+
+        allow get: if true;
+        allow list: if true; // Required for leaderboard
+
+        allow create: if isSignedIn() &&
+                        isValidPlayer(incoming()) &&
+                        playerId == request.auth.uid &&
+                        incoming().updatedAt == request.time &&
+                        get(/databases/$(database)/documents/rooms/$(roomId)).data.status == 'waiting';
+
+        allow update: if isSignedIn() &&
+                        isValidPlayer(incoming()) &&
+                        playerId == request.auth.uid &&
+                        incoming().nickname == existing().nickname &&
+                        incoming().updatedAt == request.time &&
+                        get(/databases/$(database)/documents/rooms/$(roomId)).data.status == 'active' &&
+                        incoming().diff(existing()).affectedKeys().hasOnly(['score', 'lastAnsweredIndex', 'updatedAt']);
+      }
+
+      match /questions/{questionId} {
+        function isValidQuestion(data) {
+          return data.word is string && data.word.size() > 0 &&
+                 data.definition is string && data.definition.size() > 0 &&
+                 data.options is list && data.options.size() == 4 &&
+                 data.correctIndex is number;
+        }
+
+        allow read: if true;
+        allow create, update, delete: if isSignedIn() &&
+                                         get(/databases/$(database)/documents/rooms/$(roomId)).data.hostId == request.auth.uid &&
+                                         isValidQuestion(incoming());
+      }
+    }
+  }
+}

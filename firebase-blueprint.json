@@ -1,0 +1,54 @@
+{
+  "entities": {
+    "Room": {
+      "title": "Game Room",
+      "description": "Represents a multiplayer vocab jam session.",
+      "type": "object",
+      "properties": {
+        "hostId": { "type": "string" },
+        "status": { "type": "string", "enum": ["waiting", "active", "ended"] },
+        "currentQuestionIndex": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["hostId", "status", "currentQuestionIndex", "createdAt"]
+    },
+    "Player": {
+      "title": "Player",
+      "description": "A player in a game room.",
+      "type": "object",
+      "properties": {
+        "nickname": { "type": "string" },
+        "score": { "type": "number" },
+        "lastAnsweredIndex": { "type": "number" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["nickname", "score", "updatedAt"]
+    },
+    "Question": {
+      "title": "Question",
+      "description": "A vocabulary question.",
+      "type": "object",
+      "properties": {
+        "word": { "type": "string" },
+        "definition": { "type": "string" },
+        "options": { "type": "array", "items": { "type": "string" } },
+        "correctIndex": { "type": "number" }
+      },
+      "required": ["word", "definition", "options", "correctIndex"]
+    }
+  },
+  "firestore": {
+    "rooms/{roomId}": {
+      "schema": "Room",
+      "description": "The main room document."
+    },
+    "rooms/{roomId}/players/{playerId}": {
+      "schema": "Player",
+      "description": "Players in the room."
+    },
+    "rooms/{roomId}/questions/{questionId}": {
+      "schema": "Question",
+      "description": "Questions for the jam."
+    }
+  }
+}
