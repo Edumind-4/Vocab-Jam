@@ -317,6 +317,7 @@ export default function App() {
                 handleJoinRoom={handleJoinRoom} 
                 loading={loading} 
                 error={error} 
+                setError={setError}
               />
             )}
             {screen === 'create' && (
@@ -385,7 +386,8 @@ function WelcomeScreen({
   setNickname, 
   handleJoinRoom, 
   loading, 
-  error 
+  error,
+  setError
 }: any) {
   return (
     <div className="flex flex-col items-center justify-center space-y-8 p-6 max-w-md mx-auto min-h-[60vh]">
@@ -443,7 +445,27 @@ function WelcomeScreen({
           </button>
         </div>
       </div>
-      {error && <p id="error-msg" className="text-red-500 text-sm font-bold animate-bounce">{error}</p>}
+      {error && (
+        <div className="space-y-4 w-full">
+          <p id="error-msg" className="text-red-500 text-sm font-bold animate-bounce bg-red-50 p-4 rounded-xl border border-red-100 text-center">{error}</p>
+          {error.includes('ADMIN_REQUIRED') && (
+            <button 
+              onClick={async () => {
+                try {
+                  await signInWithGoogle();
+                  setError(null);
+                } catch (e: any) {
+                  setError(e.message);
+                }
+              }}
+              className="w-full py-3 bg-white border-2 border-gray-200 rounded-xl font-bold flex items-center justify-center space-x-2 hover:bg-gray-50 transition-all"
+            >
+              <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" className="w-5 h-5" alt="Google" />
+              <span>Join with Google Login</span>
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
