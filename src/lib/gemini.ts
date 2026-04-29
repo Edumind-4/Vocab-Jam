@@ -12,7 +12,7 @@ export interface QuizQuestion {
 
 export async function generateQuiz(criteria: string): Promise<QuizQuestion[]> {
   // Correct way to initialize the model
-  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+  const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
 
   const prompt = `Generate a vocabulary quiz based on the following criteria: "${criteria}". 
   Create exactly 10 questions. Each question must have a target word, its definition, and 4 multiple-choice options (one correct, three plausible distractors).`;
