@@ -1,3 +1,7 @@
+import { GoogleGenAI, Type } from "@google/genai";
+
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY as string });
+
 export interface QuizQuestion {
   word: string;
   definition: string;
@@ -6,18 +10,42 @@ export interface QuizQuestion {
 }
 
 export async function generateQuiz(criteria: string): Promise<QuizQuestion[]> {
-  const response = await fetch("/api/generate-quiz", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ criteria }),
-  });
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: `Generate a vocabulary quiz based on the following criteria: "${criteria}". 
+      Create exactly 10 questions. Each question must have a target word, its definition, and 4 multiple-choice options (one correct, three plausible distractors).`,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              word: { type: Type.STRING },
+              definition: { type: Type.STRING },
+              options: { 
+                type: Type.ARRAY, 
+                items: { type: Type.STRING }
+              },
+              correctIndex: { 
+                type: Type.NUMBER
+              }
+            },
+            required: ["word", "definition", "options", "correctIndex"]
+          }
+        }
+      }
+    });
 
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.error || "Failed to generate quiz");
+    const text = response.text;
+    if (!text) {
+      throw new Error("Empty response from AI");
+    }
+    
+    return JSON.parse(text);
+  } catch (error: any) {
+    console.error("Gemini API Error:", error);
+    throw new Error(error.message || "Failed to generate quiz. Please try again.");
   }
-
-  return await response.json();
 }
