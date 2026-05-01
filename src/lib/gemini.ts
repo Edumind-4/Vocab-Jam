@@ -21,7 +21,7 @@ export async function generateQuiz(params: QuizParams): Promise<QuizQuestion[]> 
   
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-2.5-flash-lite",
       contents: `Generate a professional-grade vocabulary quiz for ${grade} level ${subject} students focusing on "${topic}".
       
       Requirements:
