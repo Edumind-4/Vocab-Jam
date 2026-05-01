@@ -11,8 +11,6 @@ import {
   Plus, 
   Play, 
   ArrowRight, 
-  Cpu, 
-  Keyboard, 
   Loader2, 
   CheckCircle2, 
   Zap,
@@ -87,7 +85,7 @@ export default function App() {
   };
 
   // 2. Room Creation
-  const handleCreateRoom = async (manualQuestions?: QuizQuestion[], settings?: RoomData['settings']) => {
+  const handleCreateRoom = async (aiQuestions: QuizQuestion[], settings: RoomData['settings']) => {
     setLoading(true);
     setError(null);
     try {
@@ -113,20 +111,13 @@ export default function App() {
         status: 'waiting',
         currentQuestionIndex: 0,
         createdAt: serverTimestamp(),
-        settings: settings || {
-          grade: 'High School',
-          subject: 'Vocabulary',
-          topic: 'General',
-          timerSeconds: 30,
-          autoNext: true
-        }
+        settings: settings
       };
 
       await setDoc(roomRef, newRoom);
       
-      const targetQuestions = manualQuestions || [];
-      for (let i = 0; i < targetQuestions.length; i++) {
-        await setDoc(doc(db, `rooms/${code}/questions`, `q${i}`), targetQuestions[i]);
+      for (let i = 0; i < aiQuestions.length; i++) {
+        await setDoc(doc(db, `rooms/${code}/questions`, `q${i}`), aiQuestions[i]);
       }
 
       setRoomCode(code);
@@ -525,58 +516,18 @@ function WelcomeScreen({
   );
 }
 
-function CreateScreen({ setScreen, handleAIGenerate, handleCreateRoom, loading, error, setError }: any) {
-  const [mode, setMode] = useState<'ai' | 'manual'>('ai');
+function CreateScreen({ setScreen, handleAIGenerate, loading, error, setError }: any) {
   const [topic, setTopic] = useState('');
   const [grade, setGrade] = useState('High School');
   const [subject, setSubject] = useState('English');
   const [timer, setTimer] = useState(30);
   const [autoNext, setAutoNext] = useState(true);
-  const [manualText, setManualText] = useState('');
-
-  const processManual = () => {
-    const lines = manualText.split('\n').filter(l => l.includes(':'));
-    const qList: QuizQuestion[] = lines.map(line => {
-      const [word, def] = line.split(':').map(s => s.trim());
-      const opts = [def, "Abstract Concept", "Physical Interaction", "Metaphorical Stance"].sort(() => Math.random() - 0.5);
-      return {
-        word,
-        definition: def,
-        options: opts,
-        correctIndex: opts.indexOf(def)
-      };
-    });
-    handleCreateRoom(qList, {
-      topic: 'Custom List',
-      grade: 'Mixed',
-      subject: 'Vocabulary',
-      timerSeconds: timer,
-      autoNext: autoNext
-    });
-  };
 
   return (
     <div className="p-6 max-w-2xl mx-auto space-y-8 pb-32">
       <div className="flex items-center space-x-4">
         <button onClick={() => setScreen('welcome')} className="p-2 hover:bg-gray-100 rounded-full transition-colors"><ArrowRight className="rotate-180" /></button>
         <h2 className="text-3xl font-black">Host a Jam</h2>
-      </div>
-
-      <div className="flex bg-gray-100 p-1 rounded-xl">
-        <button 
-          onClick={() => setMode('ai')}
-          className={`flex-1 py-3 rounded-lg font-bold flex items-center justify-center space-x-2 transition-all ${mode === 'ai' ? 'bg-white shadow-sm text-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}
-        >
-          <Cpu size={20} />
-          <span>AI Wizard</span>
-        </button>
-        <button 
-          onClick={() => setMode('manual')}
-          className={`flex-1 py-3 rounded-lg font-bold flex items-center justify-center space-x-2 transition-all ${mode === 'manual' ? 'bg-white shadow-sm text-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}
-        >
-          <Keyboard size={20} />
-          <span>Manual Entry</span>
-        </button>
       </div>
 
       <div className="grid grid-cols-2 gap-4">
@@ -604,69 +555,51 @@ function CreateScreen({ setScreen, handleAIGenerate, handleCreateRoom, loading, 
         </div>
       </div>
 
-      {mode === 'ai' ? (
-        <div className="space-y-6">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1">
-              <label className="text-xs font-black text-gray-400 uppercase tracking-widest">Level</label>
-              <select 
-                value={grade}
-                onChange={(e) => setGrade(e.target.value)}
-                className="w-full p-3 bg-gray-50 border-2 border-gray-200 rounded-xl font-bold focus:border-indigo-500 outline-none"
-              >
-                <option>Elementary</option>
-                <option>Middle School</option>
-                <option>High School</option>
-                <option>College / GRE</option>
-              </select>
-            </div>
-            <div className="space-y-1">
-              <label className="text-xs font-black text-gray-400 uppercase tracking-widest">Subject</label>
-              <input 
-                type="text"
-                value={subject}
-                onChange={(e) => setSubject(e.target.value)}
-                placeholder="e.g. Science, Literature"
-                className="w-full p-3 bg-gray-50 border-2 border-gray-200 rounded-xl font-bold focus:border-indigo-500 outline-none"
-              />
-            </div>
+      <div className="space-y-6">
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-1">
+            <label className="text-xs font-black text-gray-400 uppercase tracking-widest">Level</label>
+            <select 
+              value={grade}
+              onChange={(e) => setGrade(e.target.value)}
+              className="w-full p-3 bg-gray-50 border-2 border-gray-200 rounded-xl font-bold focus:border-indigo-500 outline-none"
+            >
+              <option>Elementary</option>
+              <option>Middle School</option>
+              <option>High School</option>
+              <option>College / GRE</option>
+            </select>
           </div>
           <div className="space-y-1">
-             <label className="text-xs font-black text-gray-400 uppercase tracking-widest">Enter Topic or Word List</label>
-            <textarea 
-              value={topic}
-              onChange={(e) => setTopic(e.target.value)}
-              placeholder="e.g. Ecology vocabulary, 19th Century Literature, Medical terminology..."
-              className="w-full h-32 p-4 bg-gray-50 border-2 border-gray-200 rounded-2xl focus:border-indigo-500 focus:ring-0 transition-colors resize-none"
+            <label className="text-xs font-black text-gray-400 uppercase tracking-widest">Subject</label>
+            <input 
+              type="text"
+              value={subject}
+              onChange={(e) => setSubject(e.target.value)}
+              placeholder="e.g. Science, Literature"
+              className="w-full p-3 bg-gray-50 border-2 border-gray-200 rounded-xl font-bold focus:border-indigo-500 outline-none"
             />
           </div>
-          <button 
-            onClick={() => handleAIGenerate({ topic, grade, subject, timer, autoNext })}
-            disabled={loading || !topic}
-            className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-bold flex items-center justify-center space-x-2 disabled:bg-gray-300 shadow-xl shadow-indigo-100"
-          >
-            {loading ? <Loader2 className="animate-spin" /> : <Zap size={20} />}
-            <span>Generate Arena with AI</span>
-          </button>
         </div>
-      ) : (
-        <div className="space-y-4">
-          <label className="block text-sm font-bold text-gray-700">Paste your list (Word: Definition)</label>
+        <div className="space-y-1">
+            <label className="text-xs font-black text-gray-400 uppercase tracking-widest">Enter Topic or Word List</label>
           <textarea 
-            value={manualText}
-            onChange={(e) => setManualText(e.target.value)}
-            placeholder="Ethereal: Extremely delicate and light&#10;Melancholy: A feeling of pensive sadness"
-            className="w-full h-48 p-4 bg-gray-50 border-2 border-gray-200 rounded-2xl focus:border-indigo-500 focus:ring-0 transition-colors resize-none"
+            value={topic}
+            onChange={(e) => setTopic(e.target.value)}
+            placeholder="e.g. Ecology vocabulary, 19th Century Literature, Medical terminology..."
+            className="w-full h-32 p-4 bg-gray-50 border-2 border-gray-200 rounded-2xl focus:border-indigo-500 focus:ring-0 transition-colors resize-none"
           />
-          <button 
-            onClick={processManual}
-            disabled={loading || !manualText}
-            className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-bold disabled:bg-gray-300 shadow-xl shadow-indigo-100"
-          >
-            <span>Build Jam Manually</span>
-          </button>
         </div>
-      )}
+        <button 
+          onClick={() => handleAIGenerate({ topic, grade, subject, timer, autoNext })}
+          disabled={loading || !topic}
+          className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-bold flex items-center justify-center space-x-2 disabled:bg-gray-300 shadow-xl shadow-indigo-100"
+        >
+          {loading ? <Loader2 className="animate-spin" /> : <Zap size={20} />}
+          <span>Generate Arena with AI</span>
+        </button>
+      </div>
+
       {error && (
         <div className="space-y-4 w-full">
           <p className="text-red-500 font-bold bg-red-50 p-4 rounded-xl text-sm border border-red-100">{error}</p>
