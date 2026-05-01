@@ -53,6 +53,13 @@ interface RoomData {
   currentQuestionIndex: number;
   createdAt: any;
   questionStartedAt?: any;
+  settings: {
+    grade: string;
+    subject: string;
+    topic: string;
+    timerSeconds: number;
+    autoNext: boolean;
+  };
 }
 
 export default function App() {
@@ -80,7 +87,7 @@ export default function App() {
   };
 
   // 2. Room Creation
-  const handleCreateRoom = async (manualQuestions?: QuizQuestion[]) => {
+  const handleCreateRoom = async (manualQuestions?: QuizQuestion[], settings?: RoomData['settings']) => {
     setLoading(true);
     setError(null);
     try {
@@ -106,15 +113,20 @@ export default function App() {
         status: 'waiting',
         currentQuestionIndex: 0,
         createdAt: serverTimestamp(),
+        settings: settings || {
+          grade: 'High School',
+          subject: 'Vocabulary',
+          topic: 'General',
+          timerSeconds: 30,
+          autoNext: true
+        }
       };
 
       await setDoc(roomRef, newRoom);
       
-      // If manual questions provided
-      if (manualQuestions) {
-        for (let i = 0; i < manualQuestions.length; i++) {
-          await setDoc(doc(db, `rooms/${code}/questions`, `q${i}`), manualQuestions[i]);
-        }
+      const targetQuestions = manualQuestions || [];
+      for (let i = 0; i < targetQuestions.length; i++) {
+        await setDoc(doc(db, `rooms/${code}/questions`, `q${i}`), targetQuestions[i]);
       }
 
       setRoomCode(code);
@@ -139,12 +151,23 @@ export default function App() {
   };
 
   // 3. AI Generation
-  const handleAIGenerate = async (criteria: string) => {
+  const handleAIGenerate = async (params: { topic: string, grade: string, subject: string, timer: number, autoNext: boolean }) => {
     setLoading(true);
     setError(null);
     try {
-      const aiQuestions = await generateQuiz(criteria);
-      await handleCreateRoom(aiQuestions);
+      const aiQuestions = await generateQuiz({
+        topic: params.topic,
+        grade: params.grade,
+        subject: params.subject,
+        quantity: 10
+      });
+      await handleCreateRoom(aiQuestions, {
+        topic: params.topic,
+        grade: params.grade,
+        subject: params.subject,
+        timerSeconds: params.timer,
+        autoNext: params.autoNext
+      });
     } catch (err: any) {
       setError(err.message || 'AI Generation failed.');
     } finally {
@@ -504,7 +527,11 @@ function WelcomeScreen({
 
 function CreateScreen({ setScreen, handleAIGenerate, handleCreateRoom, loading, error, setError }: any) {
   const [mode, setMode] = useState<'ai' | 'manual'>('ai');
-  const [prompt, setPrompt] = useState('');
+  const [topic, setTopic] = useState('');
+  const [grade, setGrade] = useState('High School');
+  const [subject, setSubject] = useState('English');
+  const [timer, setTimer] = useState(30);
+  const [autoNext, setAutoNext] = useState(true);
   const [manualText, setManualText] = useState('');
 
   const processManual = () => {
@@ -519,11 +546,17 @@ function CreateScreen({ setScreen, handleAIGenerate, handleCreateRoom, loading, 
         correctIndex: opts.indexOf(def)
       };
     });
-    handleCreateRoom(qList);
+    handleCreateRoom(qList, {
+      topic: 'Custom List',
+      grade: 'Mixed',
+      subject: 'Vocabulary',
+      timerSeconds: timer,
+      autoNext: autoNext
+    });
   };
 
   return (
-    <div className="p-6 max-w-2xl mx-auto space-y-8">
+    <div className="p-6 max-w-2xl mx-auto space-y-8 pb-32">
       <div className="flex items-center space-x-4">
         <button onClick={() => setScreen('welcome')} className="p-2 hover:bg-gray-100 rounded-full transition-colors"><ArrowRight className="rotate-180" /></button>
         <h2 className="text-3xl font-black">Host a Jam</h2>
@@ -546,22 +579,74 @@ function CreateScreen({ setScreen, handleAIGenerate, handleCreateRoom, loading, 
         </button>
       </div>
 
-      {mode === 'ai' ? (
-        <div className="space-y-4">
-          <label className="block text-sm font-bold text-gray-700">What's the topic?</label>
-          <textarea 
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            placeholder="e.g. 8th Grade Science, SAT Academic Words, Shakespearean Synonyms..."
-            className="w-full h-32 p-4 bg-gray-50 border-2 border-gray-200 rounded-2xl focus:border-indigo-500 focus:ring-0 transition-colors resize-none"
-          />
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-1">
+          <label className="text-xs font-black text-gray-400 uppercase tracking-widest">Question Time</label>
+          <select 
+            value={timer}
+            onChange={(e) => setTimer(Number(e.target.value))}
+            className="w-full p-3 bg-gray-50 border-2 border-gray-200 rounded-xl font-bold focus:border-indigo-500 outline-none"
+          >
+            <option value={15}>15 Seconds</option>
+            <option value={30}>30 Seconds</option>
+            <option value={45}>45 Seconds</option>
+            <option value={60}>60 Seconds</option>
+          </select>
+        </div>
+        <div className="space-y-1">
+          <label className="text-xs font-black text-gray-400 uppercase tracking-widest">Auto-Next</label>
           <button 
-            onClick={() => handleAIGenerate(prompt)}
-            disabled={loading || !prompt}
+            onClick={() => setAutoNext(!autoNext)}
+            className={`w-full p-3 border-2 rounded-xl font-bold transition-all ${autoNext ? 'bg-indigo-50 border-indigo-500 text-indigo-600' : 'bg-gray-50 border-gray-200 text-gray-400'}`}
+          >
+            {autoNext ? 'Automatic' : 'Manual'}
+          </button>
+        </div>
+      </div>
+
+      {mode === 'ai' ? (
+        <div className="space-y-6">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <label className="text-xs font-black text-gray-400 uppercase tracking-widest">Level</label>
+              <select 
+                value={grade}
+                onChange={(e) => setGrade(e.target.value)}
+                className="w-full p-3 bg-gray-50 border-2 border-gray-200 rounded-xl font-bold focus:border-indigo-500 outline-none"
+              >
+                <option>Elementary</option>
+                <option>Middle School</option>
+                <option>High School</option>
+                <option>College / GRE</option>
+              </select>
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-black text-gray-400 uppercase tracking-widest">Subject</label>
+              <input 
+                type="text"
+                value={subject}
+                onChange={(e) => setSubject(e.target.value)}
+                placeholder="e.g. Science, Literature"
+                className="w-full p-3 bg-gray-50 border-2 border-gray-200 rounded-xl font-bold focus:border-indigo-500 outline-none"
+              />
+            </div>
+          </div>
+          <div className="space-y-1">
+             <label className="text-xs font-black text-gray-400 uppercase tracking-widest">Enter Topic or Word List</label>
+            <textarea 
+              value={topic}
+              onChange={(e) => setTopic(e.target.value)}
+              placeholder="e.g. Ecology vocabulary, 19th Century Literature, Medical terminology..."
+              className="w-full h-32 p-4 bg-gray-50 border-2 border-gray-200 rounded-2xl focus:border-indigo-500 focus:ring-0 transition-colors resize-none"
+            />
+          </div>
+          <button 
+            onClick={() => handleAIGenerate({ topic, grade, subject, timer, autoNext })}
+            disabled={loading || !topic}
             className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-bold flex items-center justify-center space-x-2 disabled:bg-gray-300 shadow-xl shadow-indigo-100"
           >
             {loading ? <Loader2 className="animate-spin" /> : <Zap size={20} />}
-            <span>Generate Quiz with AI</span>
+            <span>Generate Arena with AI</span>
           </button>
         </div>
       ) : (
@@ -670,6 +755,27 @@ function WaitingRoom({ roomCode, players, role, handleStartGame }: any) {
 }
 
 function GameArena({ room, questions, players, playerMe, role, submitAnswer, handleNextQuestion, roomCode }: any) {
+  const [timeLeft, setTimeLeft] = useState(room?.settings?.timerSeconds || 30);
+  
+  useEffect(() => {
+    if (!room?.questionStartedAt) return;
+    
+    const interval = setInterval(() => {
+      const startTime = room.questionStartedAt.toMillis();
+      const now = Date.now();
+      const elapsed = Math.floor((now - startTime) / 1000);
+      const remaining = Math.max(0, (room.settings?.timerSeconds || 30) - elapsed);
+      setTimeLeft(remaining);
+
+      // Auto-next logic for host
+      if (role === 'host' && room.settings?.autoNext && remaining === 0) {
+        handleNextQuestion();
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [room?.questionStartedAt, room?.currentQuestionIndex, role, room?.settings, handleNextQuestion]);
+
   if (!room || questions.length === 0) return (
     <div className="flex items-center justify-center min-h-screen">
       <Loader2 className="animate-spin text-indigo-600" size={48} />
@@ -703,6 +809,16 @@ function GameArena({ room, questions, players, playerMe, role, submitAnswer, han
               <div className="absolute -bottom-1 left-0 right-0 h-1 bg-white/30"></div>
             )}
           </div>
+        </div>
+        
+        {/* Timer Bar */}
+        <div className="w-full h-1 bg-gray-100 overflow-hidden">
+          <motion.div 
+            initial={{ width: '100%' }}
+            animate={{ width: `${(timeLeft / (room.settings?.timerSeconds || 30)) * 100}%` }}
+            transition={{ duration: 1, ease: "linear" }}
+            className={`h-full ${timeLeft < 5 ? 'bg-red-500' : 'bg-indigo-500'}`}
+          />
         </div>
         
         {/* Real-time Individual Leaderboard Bar */}
@@ -804,103 +920,103 @@ function ResultsPodium({ players, reset }: any) {
   const winnerColor = redScore > blueScore ? 'text-red-500' : blueScore > redScore ? 'text-blue-500' : 'text-gray-500';
 
   return (
-    <div className="min-h-screen py-24 px-6">
-      <div className="max-w-4xl mx-auto space-y-16 text-center">
+    <div className="min-h-screen py-12 md:py-24 px-4 md:px-6 bg-gray-50">
+      <div className="max-w-4xl mx-auto space-y-12 md:space-y-16 text-center">
         <motion.div 
           initial={{ scale: 0.8, opacity: 0 }} 
           animate={{ scale: 1, opacity: 1 }} 
-          className="space-y-6"
+          className="space-y-4 md:space-y-6"
         >
-          <div className={`text-xl font-black uppercase tracking-[0.5em] ${winnerColor}`}>
+          <div className={`text-base md:text-xl font-black uppercase tracking-[0.3em] md:tracking-[0.5em] ${winnerColor}`}>
             {winningTeam === 'Tie' ? "It's a Tie!" : `${winningTeam} Victors!`}
           </div>
-          <h2 className="text-8xl font-black text-gray-900 tracking-tighter">Arena Results</h2>
+          <h2 className="text-5xl md:text-8xl font-black text-gray-900 tracking-tighter">Arena Results</h2>
         </motion.div>
 
         {/* Team Comparison */}
-        <div className="grid grid-cols-2 gap-8 max-w-2xl mx-auto">
-          <div className={`p-8 rounded-[40px] border-4 ${redScore > blueScore ? 'bg-red-500 text-white border-red-200' : 'bg-white border-red-500 text-red-500'} shadow-xl`}>
-            <div className="text-sm font-black uppercase mb-1">Red Team</div>
-            <div className="text-5xl font-black">{redScore.toLocaleString()}</div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-8 max-w-2xl mx-auto px-4">
+          <div className={`p-6 md:p-8 rounded-3xl md:rounded-[40px] border-4 ${redScore > blueScore ? 'bg-red-500 text-white border-red-200' : 'bg-white border-red-500 text-red-500'} shadow-xl`}>
+            <div className="text-xs md:text-sm font-black uppercase mb-1">Red Team</div>
+            <div className="text-3xl md:text-5xl font-black">{redScore.toLocaleString()}</div>
           </div>
-          <div className={`p-8 rounded-[40px] border-4 ${blueScore > redScore ? 'bg-blue-500 text-white border-blue-200' : 'bg-white border-blue-500 text-blue-500'} shadow-xl`}>
-            <div className="text-sm font-black uppercase mb-1">Blue Team</div>
-            <div className="text-5xl font-black">{blueScore.toLocaleString()}</div>
+          <div className={`p-6 md:p-8 rounded-3xl md:rounded-[40px] border-4 ${blueScore > redScore ? 'bg-blue-500 text-white border-blue-200' : 'bg-white border-blue-500 text-blue-500'} shadow-xl`}>
+            <div className="text-xs md:text-sm font-black uppercase mb-1">Blue Team</div>
+            <div className="text-3xl md:text-5xl font-black">{blueScore.toLocaleString()}</div>
           </div>
         </div>
 
-        <div className="space-y-4">
-          <h3 className="text-2xl font-black text-gray-400 uppercase tracking-widest italic">Top Performers</h3>
-          <div className="flex items-end justify-center space-x-4 h-96 mt-10 px-4 relative max-w-2xl mx-auto">
-            {/* Silver */}
+        <div className="space-y-8">
+          <h3 className="text-xl md:text-2xl font-black text-gray-400 uppercase tracking-widest italic">Top Performers</h3>
+          
+          {/* Responsive Podium: Horizontal on desktop, Vertical on mobile */}
+          <div className="flex flex-col md:flex-row items-center md:items-end justify-center space-y-16 md:space-y-0 md:space-x-4 md:h-96 mt-10 px-4 relative max-w-2xl mx-auto">
+            {/* 2nd Place */}
             {top3[1] && (
               <motion.div 
-                initial={{ height: 0 }} 
-                animate={{ height: '70%' }} 
-                transition={{ duration: 1, delay: 0.5 }}
-                className="flex-1 bg-slate-200 rounded-t-[40px] relative flex flex-col items-center justify-start p-6 shadow-lg"
+                initial={{ height: 0, opacity: 0 }} 
+                animate={{ height: 'auto', opacity: 1 }} 
+                className="w-full md:flex-1 bg-slate-200 md:rounded-t-[40px] rounded-2xl relative flex flex-col items-center justify-start p-6 shadow-lg order-2 md:order-1"
               >
-                <div className="absolute -top-24 text-center w-full">
+                <div className="md:absolute md:-top-24 text-center w-full mb-4 md:mb-0">
                   <div className="w-16 h-16 bg-slate-100 rounded-full mx-auto flex items-center justify-center border-4 border-white shadow-md mb-2">
                     <User size={32} className="text-slate-400" />
                   </div>
                   <p className="font-black text-lg truncate px-2">{top3[1].nickname}</p>
                   <p className="text-slate-500 font-bold">{top3[1].score} pts</p>
                 </div>
-                <span className="text-6xl font-black text-slate-400/50 mt-4 italic">2ND</span>
+                <span className="text-4xl md:text-6xl font-black text-slate-400/50 italic">2ND</span>
               </motion.div>
             )}
 
-            {/* Gold */}
+            {/* 1st Place */}
             {top3[0] && (
               <motion.div 
-                initial={{ height: 0 }} 
-                animate={{ height: '100%' }} 
-                transition={{ duration: 1, delay: 0.8 }}
-                className="flex-1 bg-yellow-400 rounded-t-[40px] relative flex flex-col items-center justify-start p-6 shadow-[0_20px_60px_rgba(250,204,21,0.5)] z-10"
+                initial={{ height: 0, opacity: 0 }} 
+                animate={{ height: 'auto', opacity: 1 }} 
+                className="w-full md:flex-1 bg-yellow-400 md:rounded-t-[40px] rounded-2xl relative flex flex-col items-center justify-start p-8 shadow-[0_20px_60px_rgba(250,204,21,0.5)] z-10 order-1 md:order-2"
               >
-                <div className="absolute -top-32 text-center w-full">
-                  <div className="w-24 h-24 bg-yellow-300 rounded-full mx-auto flex items-center justify-center border-8 border-white shadow-xl mb-4 relative">
-                    <Trophy className="text-yellow-700" size={40} />
-                    <div className="absolute -top-4 -right-4 bg-red-500 text-white w-10 h-10 rounded-full flex items-center justify-center border-4 border-white font-black">1</div>
+                <div className="md:absolute md:-top-32 text-center w-full mb-4 md:mb-0">
+                  <div className="w-20 h-20 md:w-24 md:h-24 bg-yellow-300 rounded-full mx-auto flex items-center justify-center border-4 md:border-8 border-white shadow-xl mb-4 relative">
+                    <Trophy className="text-yellow-700" size={32} />
+                    <div className="absolute -top-2 -right-2 md:-top-4 md:-right-4 bg-red-500 text-white w-8 h-8 md:w-10 md:h-10 rounded-full flex items-center justify-center border-4 border-white font-black text-sm">1</div>
                   </div>
-                  <p className="font-black text-2xl truncate px-2">{top3[0].nickname}</p>
-                  <p className="text-yellow-800 font-black tracking-wider">{top3[0].score} pts</p>
+                  <p className="font-black text-xl md:text-2xl truncate px-2">{top3[0].nickname}</p>
+                  <p className="text-yellow-800 font-black tracking-wider uppercase text-xs">Champion</p>
+                  <p className="text-yellow-900 font-black text-lg">{top3[0].score} pts</p>
                 </div>
-                <span className="text-8xl font-black text-yellow-700/30 mt-8 italic">1ST</span>
+                <span className="text-6xl md:text-8xl font-black text-yellow-700/30 italic">1ST</span>
               </motion.div>
             )}
 
-            {/* Bronze */}
+            {/* 3rd Place */}
             {top3[2] && (
               <motion.div 
-                initial={{ height: 0 }} 
-                animate={{ height: '50%' }} 
-                transition={{ duration: 1, delay: 1 }}
-                className="flex-1 bg-orange-200 rounded-t-[40px] relative flex flex-col items-center justify-start p-6 shadow-lg"
+                initial={{ height: 0, opacity: 0 }} 
+                animate={{ height: 'auto', opacity: 1 }} 
+                className="w-full md:flex-1 bg-orange-200 md:rounded-t-[40px] rounded-2xl relative flex flex-col items-center justify-start p-6 shadow-lg order-3"
               >
-                <div className="absolute -top-24 text-center w-full">
+                <div className="md:absolute md:-top-24 text-center w-full mb-4 md:mb-0">
                   <div className="w-16 h-16 bg-orange-100 rounded-full mx-auto flex items-center justify-center border-4 border-white shadow-md mb-2">
                     <User size={32} className="text-orange-400" />
                   </div>
                   <p className="font-black text-lg truncate px-2">{top3[2].nickname}</p>
                   <p className="text-orange-700 font-bold">{top3[2].score} pts</p>
                 </div>
-                <span className="text-6xl font-black text-orange-900/10 mt-4 italic">3RD</span>
+                <span className="text-4xl md:text-6xl font-black text-orange-900/10 italic">3RD</span>
               </motion.div>
             )}
           </div>
         </div>
 
-        <div className="space-y-6 pt-24 max-w-md mx-auto">
+        <div className="space-y-6 pt-12 md:pt-24 max-w-md mx-auto">
           <button 
             id="btn-again"
             onClick={reset}
-            className="w-full py-6 bg-indigo-600 hover:bg-indigo-700 text-white rounded-3xl font-black text-2xl shadow-2xl shadow-indigo-200 transform hover:scale-105 active:scale-95 transition-all"
+            className="w-full py-4 md:py-6 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl md:rounded-3xl font-black text-xl md:text-2xl shadow-2xl shadow-indigo-200 transform hover:scale-105 active:scale-95 transition-all"
           >
             New Arena Jam
           </button>
-          <p className="text-gray-300 font-black uppercase text-xs tracking-[0.2em]">Game Over &bull; Arena Concluded</p>
+          <p className="text-gray-300 font-black uppercase text-xs tracking-[0.2em]">Arena Concluded</p>
         </div>
       </div>
     </div>

@@ -8,9 +8,20 @@
         "hostId": { "type": "string" },
         "status": { "type": "string", "enum": ["waiting", "active", "ended"] },
         "currentQuestionIndex": { "type": "number" },
-        "createdAt": { "type": "string", "format": "date-time" }
+        "createdAt": { "type": "string", "format": "date-time" },
+        "questionStartedAt": { "type": "string", "format": "date-time" },
+        "settings": {
+          "type": "object",
+          "properties": {
+            "grade": { "type": "string" },
+            "subject": { "type": "string" },
+            "topic": { "type": "string" },
+            "timerSeconds": { "type": "number" },
+            "autoNext": { "type": "boolean" }
+          }
+        }
       },
-      "required": ["hostId", "status", "currentQuestionIndex", "createdAt"]
+      "required": ["hostId", "status", "currentQuestionIndex", "createdAt", "settings"]
     },
     "Player": {
       "title": "Player",

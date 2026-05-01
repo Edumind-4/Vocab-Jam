@@ -17,7 +17,13 @@ service cloud.firestore {
              data.status in ['waiting', 'active', 'ended'] &&
              data.currentQuestionIndex is number &&
              data.createdAt is timestamp &&
-             (!('questionStartedAt' in data) || data.questionStartedAt is timestamp);
+             (!('questionStartedAt' in data) || data.questionStartedAt is timestamp) &&
+             data.settings is map &&
+             data.settings.grade is string &&
+             data.settings.subject is string &&
+             data.settings.topic is string &&
+             data.settings.timerSeconds is number &&
+             data.settings.autoNext is bool;
     }
 
     match /rooms/{roomId} {
