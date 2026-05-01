@@ -4,6 +4,7 @@ const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY as string });
 
 export interface QuizQuestion {
   word: string;
+  questionText: string;
   definition: string;
   options: string[];
   correctIndex: number;
@@ -21,15 +22,20 @@ export async function generateQuiz(params: QuizParams): Promise<QuizQuestion[]> 
   
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash-lite",
-      contents: `Generate a professional-grade vocabulary quiz for ${grade} level ${subject} students focusing on "${topic}".
+      model: "gemini-3-flash-preview",
+      contents: `Generate a professional-grade vocabulary and concept quiz for ${grade} level ${subject} students focusing on "${topic}".
       
       Requirements:
       1. Create exactly ${quantity} questions.
-      2. Each question must include a target word, its definition, 4 multiple-choice options, and the correct index.
-      3. CRITICAL: Distractors must be highly plausible, challenging, and usually the same part of speech as the target word.
-      4. CRITICAL: Never include the target word itself or its definition inside any of the distractor options.
-      5. Ensure definitions are concise and accurate for the specified grade level.`,
+      2. Each question must include:
+         - word: The target term.
+         - questionText: A specific question about the word (e.g., "What does this mean?", "Where would you typically find this?", "Which is a synonym?").
+         - definition: The correct answer/explanation.
+         - options: 4 choice strings.
+         - correctIndex: 0-3.
+      3. CRITICAL: Distractors must be highly plausible and challenging.
+      4. CRITICAL: Distractors must match the category/intent of the questionText.
+      5. Ensure questions are diverse and avoid repetitive phrasing.`,
       config: {
         responseMimeType: "application/json",
         responseSchema: {
@@ -38,6 +44,7 @@ export async function generateQuiz(params: QuizParams): Promise<QuizQuestion[]> 
             type: Type.OBJECT,
             properties: {
               word: { type: Type.STRING },
+              questionText: { type: Type.STRING },
               definition: { type: Type.STRING },
               options: { 
                 type: Type.ARRAY, 
@@ -47,7 +54,7 @@ export async function generateQuiz(params: QuizParams): Promise<QuizQuestion[]> 
                 type: Type.NUMBER
               }
             },
-            required: ["word", "definition", "options", "correctIndex"]
+            required: ["word", "questionText", "definition", "options", "correctIndex"]
           }
         }
       }

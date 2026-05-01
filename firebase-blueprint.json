@@ -41,11 +41,12 @@
       "type": "object",
       "properties": {
         "word": { "type": "string" },
+        "questionText": { "type": "string" },
         "definition": { "type": "string" },
         "options": { "type": "array", "items": { "type": "string" } },
         "correctIndex": { "type": "number" }
       },
-      "required": ["word", "definition", "options", "correctIndex"]
+      "required": ["word", "questionText", "definition", "options", "correctIndex"]
     }
   },
   "firestore": {

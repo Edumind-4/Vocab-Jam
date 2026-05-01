@@ -776,7 +776,7 @@ function GameArena({ room, questions, players, playerMe, role, submitAnswer, han
             Question {room.currentQuestionIndex + 1} of {questions.length}
           </span>
           <h2 className="text-4xl md:text-6xl font-black text-gray-900 leading-tight">
-            What does <span className="text-indigo-600 drop-shadow-sm font-mono tracking-tighter italic">"{currentQ.word}"</span> mean?
+            {currentQ.questionText}
           </h2>
         </div>
 
